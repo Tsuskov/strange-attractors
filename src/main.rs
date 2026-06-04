@@ -1,8 +1,11 @@
 use eframe::egui;
-use lorenz_attractors::{Simulator, State, AttractorType};
+use strange_attractors::{AttractorType, Simulator, State};
 
 fn main() -> Result<(), eframe::Error> {
-    let options = eframe::NativeOptions::default();
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 900.0]),
+        ..Default::default()
+    };
     eframe::run_native(
         "Strange Attractors",
         options,
@@ -34,124 +37,193 @@ impl Default for MyApp {
     }
 }
 
+fn attractor_color(index: usize, total: usize) -> egui::Color32 {
+    let t = index as f32 / total as f32;
+    let r = (0.5 + 0.5 * (t * std::f32::consts::TAU).cos()) * 255.0;
+    let g = (0.5 + 0.5 * (t * std::f32::consts::TAU + 2.0).cos()) * 255.0;
+    let b = (0.5 + 0.5 * (t * std::f32::consts::TAU + 4.0).cos()) * 255.0;
+    egui::Color32::from_rgb(r as u8, g as u8, b as u8)
+}
+
 impl eframe::App for MyApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        ui.heading("Strange Attractors");
-        
-        ui.horizontal(|ui| {
-            if ui.button(if self.running { "⏸ Pause" } else { "▶ Resume" }).clicked() {
-                self.running = !self.running;
-            }
-            if ui.button("🔄 Reset").clicked() {
-                self.simulator.clear_trajectory();
-            }
-        });
+        egui::CentralPanel::default().show_inside(ui, |ui| {
+            ui.heading("Strange Attractors");
 
-        ui.separator();
+            ui.horizontal(|ui| {
+                if ui
+                    .button(if self.running {
+                        "⏸ Pause"
+                    } else {
+                        "▶ Resume"
+                    })
+                    .clicked()
+                {
+                    self.running = !self.running;
+                }
+                if ui.button("🔄 Reset").clicked() {
+                    self.simulator.clear_trajectory();
+                }
+            });
 
-        ui.horizontal(|ui| {
-            ui.label("Attractor:");
-            if ui.selectable_label(matches!(self.simulator.attractor, AttractorType::Lorenz), "Lorenz").clicked() {
-                self.simulator.attractor = AttractorType::Lorenz;
-                self.simulator.clear_trajectory();
-            }
-            if ui.selectable_label(matches!(self.simulator.attractor, AttractorType::Rossler), "Rössler").clicked() {
-                self.simulator.attractor = AttractorType::Rossler;
-                self.simulator.clear_trajectory();
-            }
-        });
+            ui.separator();
 
-        ui.label(format!(
-            "Position: x={:.2}, y={:.2}, z={:.2}",
-            self.simulator.state.x, self.simulator.state.y, self.simulator.state.z
-        ));
+            ui.horizontal(|ui| {
+                ui.label("Attractor:");
+                if ui
+                    .selectable_label(
+                        matches!(self.simulator.attractor, AttractorType::Lorenz),
+                        "Lorenz",
+                    )
+                    .clicked()
+                {
+                    self.simulator.attractor = AttractorType::Lorenz;
+                    self.simulator.reset_for_attractor();
+                    self.zoom = 1.0;
+                }
+                if ui
+                    .selectable_label(
+                        matches!(self.simulator.attractor, AttractorType::Rossler),
+                        "Rössler",
+                    )
+                    .clicked()
+                {
+                    self.simulator.attractor = AttractorType::Rossler;
+                    self.simulator.reset_for_attractor();
+                    self.zoom = 1.0;
+                }
+                if ui
+                    .selectable_label(
+                        matches!(self.simulator.attractor, AttractorType::Thomas),
+                        "Thomas",
+                    )
+                    .clicked()
+                {
+                    self.simulator.attractor = AttractorType::Thomas;
+                    self.simulator.reset_for_attractor();
+                    self.zoom = 3.0;
+                }
+            });
 
-        ui.label(format!("Trajectory points: {}", self.simulator.trajectory.len()));
+            ui.label(format!(
+                "Position: x={:.3}, y={:.3}, z={:.3}",
+                self.simulator.state.x, self.simulator.state.y, self.simulator.state.z
+            ));
+            ui.label(format!(
+                "Trajectory points: {}",
+                self.simulator.trajectory.len()
+            ));
 
-        ui.separator();
+            ui.separator();
 
-        ui.group(|ui| {
-            match self.simulator.attractor {
+            ui.group(|ui| match self.simulator.attractor {
                 AttractorType::Lorenz => {
                     ui.label("Lorenz Parameters:");
                     ui.horizontal(|ui| {
                         ui.label("σ:");
-                        ui.add(egui::Slider::new(&mut self.simulator.lorenz_params.sigma, 0.0..=50.0).step_by(0.1));
-                        ui.label(format!("{:.1}", self.simulator.lorenz_params.sigma));
+                        ui.add(
+                            egui::Slider::new(&mut self.simulator.lorenz_params.sigma, 0.0..=50.0)
+                                .step_by(0.1),
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("ρ:");
-                        ui.add(egui::Slider::new(&mut self.simulator.lorenz_params.rho, 0.0..=50.0).step_by(0.1));
-                        ui.label(format!("{:.1}", self.simulator.lorenz_params.rho));
+                        ui.add(
+                            egui::Slider::new(&mut self.simulator.lorenz_params.rho, 0.0..=50.0)
+                                .step_by(0.1),
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("β:");
-                        ui.add(egui::Slider::new(&mut self.simulator.lorenz_params.beta, 0.0..=10.0).step_by(0.01));
-                        ui.label(format!("{:.3}", self.simulator.lorenz_params.beta));
+                        ui.add(
+                            egui::Slider::new(&mut self.simulator.lorenz_params.beta, 0.0..=10.0)
+                                .step_by(0.01),
+                        );
                     });
                 }
                 AttractorType::Rossler => {
                     ui.label("Rössler Parameters:");
                     ui.horizontal(|ui| {
                         ui.label("a:");
-                        ui.add(egui::Slider::new(&mut self.simulator.rossler_params.a, 0.0..=1.0).step_by(0.01));
-                        ui.label(format!("{:.2}", self.simulator.rossler_params.a));
+                        ui.add(
+                            egui::Slider::new(&mut self.simulator.rossler_params.a, 0.0..=1.0)
+                                .step_by(0.01),
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("b:");
-                        ui.add(egui::Slider::new(&mut self.simulator.rossler_params.b, 0.0..=1.0).step_by(0.01));
-                        ui.label(format!("{:.2}", self.simulator.rossler_params.b));
+                        ui.add(
+                            egui::Slider::new(&mut self.simulator.rossler_params.b, 0.0..=1.0)
+                                .step_by(0.01),
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("c:");
-                        ui.add(egui::Slider::new(&mut self.simulator.rossler_params.c, 0.0..=50.0).step_by(0.1));
-                        ui.label(format!("{:.1}", self.simulator.rossler_params.c));
+                        ui.add(
+                            egui::Slider::new(&mut self.simulator.rossler_params.c, 0.0..=50.0)
+                                .step_by(0.1),
+                        );
                     });
                 }
+                AttractorType::Thomas => {
+                    ui.label("Thomas Parameters:");
+                    ui.label("Classic chaos: b ≈ 0.208  |  Less chaos: b → 0.3");
+                    ui.horizontal(|ui| {
+                        ui.label("b:");
+                        ui.add(
+                            egui::Slider::new(&mut self.simulator.thomas_params.b, 0.1..=0.4)
+                                .step_by(0.001),
+                        );
+                    });
+                }
+            });
+
+            ui.separator();
+
+            let available = ui.available_size();
+            let canvas_size = egui::vec2(available.x, available.y.min(550.0));
+            let (response, painter) = ui.allocate_painter(canvas_size, egui::Sense::drag());
+            let canvas_center = response.rect.center();
+
+            let drag_delta = response.drag_delta();
+            if drag_delta != egui::Vec2::ZERO {
+                self.rotation_y += drag_delta.x * 0.01;
+                self.rotation_x += drag_delta.y * 0.01;
+            }
+
+            let scroll_delta = ui.input(|i| i.smooth_scroll_delta.y);
+            if scroll_delta != 0.0 {
+                self.zoom *= 1.0 + scroll_delta * 0.001;
+                self.zoom = self.zoom.clamp(0.1, 10.0);
+            }
+
+            painter.rect_filled(response.rect, 4.0, egui::Color32::from_rgb(10, 10, 20));
+
+            let traj = &self.simulator.trajectory;
+            if traj.len() > 1 {
+                for i in 1..traj.len() {
+                    let (x1, y1) =
+                        Simulator::project_3d_to_2d(&traj[i - 1], self.rotation_x, self.rotation_y);
+                    let (x2, y2) =
+                        Simulator::project_3d_to_2d(&traj[i], self.rotation_x, self.rotation_y);
+                    let scale = 50.0 * self.zoom;
+                    let p1 = canvas_center + egui::vec2(x1 * scale, y1 * scale);
+                    let p2 = canvas_center + egui::vec2(x2 * scale, y2 * scale);
+                    let color = attractor_color(i, traj.len());
+                    painter.line_segment([p1, p2], egui::Stroke::new(1.2, color));
+                }
+            }
+
+            if self.running {
+                let steps = match self.simulator.attractor {
+                    AttractorType::Thomas => 3,
+                    _ => 10,
+                };
+                for _ in 0..steps {
+                    self.simulator.step();
+                }
+                ui.ctx().request_repaint();
             }
         });
-
-        ui.separator();
-
-        let canvas_size = egui::vec2(600.0, 600.0);
-        let (response, painter) = ui.allocate_painter(canvas_size, egui::Sense::drag());
-        let canvas_center = response.rect.center();
-
-        let drag_delta = response.drag_delta();
-        if drag_delta != egui::Vec2::ZERO {
-            self.rotation_y += drag_delta.x * 0.01;
-            self.rotation_x += drag_delta.y * 0.01;
-        }
-
-        let scroll_delta = ui.input(|i| i.smooth_scroll_delta.y);
-        if scroll_delta != 0.0 {
-            self.zoom *= 1.0 + (scroll_delta * 0.001);
-            self.zoom = self.zoom.clamp(0.1, 10.0);
-        }
-
-        painter.rect_filled(response.rect, 0.0, egui::Color32::BLACK);
-
-        if self.simulator.trajectory.len() > 1 {
-            for i in 1..self.simulator.trajectory.len() {
-                let p1 = &self.simulator.trajectory[i-1];
-                let p2 = &self.simulator.trajectory[i];
-
-                let (x1, y1) = Simulator::project_3d_to_2d(p1, self.rotation_x, self.rotation_y);
-                let (x2, y2) = Simulator::project_3d_to_2d(p2, self.rotation_x, self.rotation_y);
-
-                let scale = 50.0 * self.zoom;
-                let screen_p1 = canvas_center + egui::vec2(x1 * scale, y1 * scale);
-                let screen_p2 = canvas_center + egui::vec2(x2 * scale, y2 * scale);
-
-                painter.line_segment([screen_p1, screen_p2], egui::Stroke::new(1.5, egui::Color32::GREEN));
-            }
-        }
-
-        if self.running {
-            for _ in 0..10 {
-                self.simulator.step();
-            }
-            ui.ctx().request_repaint();
-        }
     }
 }

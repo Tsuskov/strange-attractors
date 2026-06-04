@@ -37,29 +37,61 @@ impl Default for RosslerParams {
     }
 }
 
+pub struct ThomasParams {
+    pub b: f64,
+}
+
+impl Default for ThomasParams {
+    fn default() -> Self {
+        Self { b: 0.208186 }
+    }
+}
+
 fn lorenz_derivatives(state: State, params: &LorenzParams) -> State {
     let dx = params.sigma * (state.y - state.x);
     let dy = state.x * (params.rho - state.z) - state.y;
     let dz = state.x * state.y - params.beta * state.z;
-    State { x: dx, y: dy, z: dz }
+    State {
+        x: dx,
+        y: dy,
+        z: dz,
+    }
 }
 
 fn rossler_derivatives(state: State, params: &RosslerParams) -> State {
     let dx = -state.y - state.z;
     let dy = state.x + params.a * state.y;
     let dz = params.b + state.z * (state.x - params.c);
-    State { x: dx, y: dy, z: dz }
+    State {
+        x: dx,
+        y: dy,
+        z: dz,
+    }
 }
 
+fn thomas_derivatives(state: State, params: &ThomasParams) -> State {
+    let dx = state.y.sin() - params.b * state.x;
+    let dy = state.z.sin() - params.b * state.y;
+    let dz = state.x.sin() - params.b * state.z;
+    State {
+        x: dx,
+        y: dy,
+        z: dz,
+    }
+}
+
+#[derive(PartialEq)]
 pub enum AttractorType {
     Lorenz,
     Rossler,
+    Thomas,
 }
 
 pub struct Simulator {
     pub state: State,
     pub lorenz_params: LorenzParams,
     pub rossler_params: RosslerParams,
+    pub thomas_params: ThomasParams,
     pub attractor: AttractorType,
     pub dt: f64,
     pub trajectory: Vec<State>,
@@ -71,6 +103,7 @@ impl Simulator {
             state: initial_state,
             lorenz_params: LorenzParams::default(),
             rossler_params: RosslerParams::default(),
+            thomas_params: ThomasParams::default(),
             attractor: AttractorType::Lorenz,
             dt: 0.001,
             trajectory: Vec::with_capacity(10000),
@@ -79,43 +112,60 @@ impl Simulator {
         sim
     }
 
+    pub fn reset_for_attractor(&mut self) {
+        self.state = match self.attractor {
+            AttractorType::Lorenz => State {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+            AttractorType::Rossler => State {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+            AttractorType::Thomas => State {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        };
+        self.dt = match self.attractor {
+            AttractorType::Thomas => 0.05,
+            _ => 0.001,
+        };
+        self.clear_trajectory();
+    }
+
     pub fn step(&mut self) {
-        let derivative = match self.attractor {
-            AttractorType::Lorenz => lorenz_derivatives(self.state, &self.lorenz_params),
-            AttractorType::Rossler => rossler_derivatives(self.state, &self.rossler_params),
+        let derivatives = |s: State| match self.attractor {
+            AttractorType::Lorenz => lorenz_derivatives(s, &self.lorenz_params),
+            AttractorType::Rossler => rossler_derivatives(s, &self.rossler_params),
+            AttractorType::Thomas => thomas_derivatives(s, &self.thomas_params),
         };
 
-        let k1 = derivative;
-        
+        let k1 = derivatives(self.state);
+
         let state_2 = State {
             x: self.state.x + k1.x * self.dt / 2.0,
             y: self.state.y + k1.y * self.dt / 2.0,
             z: self.state.z + k1.z * self.dt / 2.0,
         };
-        let k2 = match self.attractor {
-            AttractorType::Lorenz => lorenz_derivatives(state_2, &self.lorenz_params),
-            AttractorType::Rossler => rossler_derivatives(state_2, &self.rossler_params),
-        };
-        
+        let k2 = derivatives(state_2);
+
         let state_3 = State {
             x: self.state.x + k2.x * self.dt / 2.0,
             y: self.state.y + k2.y * self.dt / 2.0,
             z: self.state.z + k2.z * self.dt / 2.0,
         };
-        let k3 = match self.attractor {
-            AttractorType::Lorenz => lorenz_derivatives(state_3, &self.lorenz_params),
-            AttractorType::Rossler => rossler_derivatives(state_3, &self.rossler_params),
-        };
-        
+        let k3 = derivatives(state_3);
+
         let state_4 = State {
             x: self.state.x + k3.x * self.dt,
             y: self.state.y + k3.y * self.dt,
             z: self.state.z + k3.z * self.dt,
         };
-        let k4 = match self.attractor {
-            AttractorType::Lorenz => lorenz_derivatives(state_4, &self.lorenz_params),
-            AttractorType::Rossler => rossler_derivatives(state_4, &self.rossler_params),
-        };
+        let k4 = derivatives(state_4);
 
         self.state.x += (k1.x + 2.0 * k2.x + 2.0 * k3.x + k4.x) * self.dt / 6.0;
         self.state.y += (k1.y + 2.0 * k2.y + 2.0 * k3.y + k4.y) * self.dt / 6.0;
