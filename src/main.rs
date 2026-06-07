@@ -19,6 +19,8 @@ struct MyApp {
     rotation_x: f32,
     rotation_y: f32,
     zoom: f32,
+    light_mode: bool,
+    pan: egui::Vec2,
 }
 
 impl Default for MyApp {
@@ -33,6 +35,8 @@ impl Default for MyApp {
             rotation_x: 0.3,
             rotation_y: 0.5,
             zoom: 1.0,
+            light_mode: false,
+            pan: egui::Vec2::ZERO,
         }
     }
 }
@@ -63,7 +67,9 @@ impl eframe::App for MyApp {
                 }
                 if ui.button("🔄 Reset").clicked() {
                     self.simulator.clear_trajectory();
+                    self.pan = egui::Vec2::ZERO;
                 }
+                ui.toggle_value(&mut self.light_mode, "☀ Light mode");
             });
 
             ui.separator();
@@ -80,6 +86,7 @@ impl eframe::App for MyApp {
                     self.simulator.attractor = AttractorType::Lorenz;
                     self.simulator.reset_for_attractor();
                     self.zoom = 1.0;
+                    self.pan = egui::Vec2::ZERO;
                 }
                 if ui
                     .selectable_label(
@@ -91,6 +98,7 @@ impl eframe::App for MyApp {
                     self.simulator.attractor = AttractorType::Rossler;
                     self.simulator.reset_for_attractor();
                     self.zoom = 1.0;
+                    self.pan = egui::Vec2::ZERO;
                 }
                 if ui
                     .selectable_label(
@@ -102,6 +110,7 @@ impl eframe::App for MyApp {
                     self.simulator.attractor = AttractorType::Thomas;
                     self.simulator.reset_for_attractor();
                     self.zoom = 3.0;
+                    self.pan = egui::Vec2::ZERO;
                 }
             });
 
@@ -197,7 +206,28 @@ impl eframe::App for MyApp {
                 self.zoom = self.zoom.clamp(0.1, 10.0);
             }
 
-            painter.rect_filled(response.rect, 4.0, egui::Color32::from_rgb(10, 10, 20));
+            let pan_speed = 3.0;
+            ui.input(|i| {
+                if i.key_down(egui::Key::ArrowLeft) {
+                    self.pan.x -= pan_speed;
+                }
+                if i.key_down(egui::Key::ArrowRight) {
+                    self.pan.x += pan_speed;
+                }
+                if i.key_down(egui::Key::ArrowUp) {
+                    self.pan.y -= pan_speed;
+                }
+                if i.key_down(egui::Key::ArrowDown) {
+                    self.pan.y += pan_speed;
+                }
+            });
+
+            let bg = if self.light_mode {
+                egui::Color32::from_rgb(245, 245, 235)
+            } else {
+                egui::Color32::from_rgb(10, 10, 20)
+            };
+            painter.rect_filled(response.rect, 4.0, bg);
 
             let traj = &self.simulator.trajectory;
             if traj.len() > 1 {
@@ -208,17 +238,23 @@ impl eframe::App for MyApp {
                 let scale = 50.0 * self.zoom;
                 let total = traj.len();
 
+                let origin = canvas_center + self.pan;
                 let projected: Vec<egui::Pos2> = traj
                     .iter()
                     .map(|p| {
                         let (px, py) =
                             Simulator::project_3d_to_2d(p, cos_x, sin_x, cos_y, sin_y);
-                        canvas_center + egui::vec2(px * scale, py * scale)
+                        origin + egui::vec2(px * scale, py * scale)
                     })
                     .collect();
 
                 for i in 1..total {
-                    let color = attractor_color(i, total);
+                    let c = attractor_color(i, total);
+                    let color = if self.light_mode {
+                        egui::Color32::from_rgb(255 - c.r(), 255 - c.g(), 255 - c.b())
+                    } else {
+                        c
+                    };
                     painter.line_segment(
                         [projected[i - 1], projected[i]],
                         egui::Stroke::new(1.2, color),
@@ -226,13 +262,22 @@ impl eframe::App for MyApp {
                 }
             }
 
-            if self.running {
-                let steps = match self.simulator.attractor {
-                    AttractorType::Thomas => 3,
-                    _ => 10,
-                };
-                for _ in 0..steps {
-                    self.simulator.step();
+            let arrow_held = ui.input(|i| {
+                i.key_down(egui::Key::ArrowLeft)
+                    || i.key_down(egui::Key::ArrowRight)
+                    || i.key_down(egui::Key::ArrowUp)
+                    || i.key_down(egui::Key::ArrowDown)
+            });
+
+            if self.running || arrow_held {
+                if self.running {
+                    let steps = match self.simulator.attractor {
+                        AttractorType::Thomas => 3,
+                        _ => 10,
+                    };
+                    for _ in 0..steps {
+                        self.simulator.step();
+                    }
                 }
                 ui.ctx().request_repaint();
             }
