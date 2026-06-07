@@ -241,26 +241,6 @@ impl eframe::App for MyApp {
                 view_origin + egui::vec2(px * scale, py * scale)
             };
 
-            {
-                let o = project_pt(State { x: 0.0, y: 0.0, z: 0.0 });
-                let x_tip = project_pt(State { x: 10.0, y: 0.0, z: 0.0 });
-                let y_tip = project_pt(State { x: 0.0, y: 10.0, z: 0.0 });
-                let z_tip = project_pt(State { x: 0.0, y: 0.0, z: 10.0 });
-
-                let red   = egui::Color32::from_rgb(220, 60,  60);
-                let green = egui::Color32::from_rgb(60,  200, 60);
-                let blue  = egui::Color32::from_rgb(80,  120, 255);
-
-                painter.line_segment([o, x_tip], egui::Stroke::new(1.5, red));
-                painter.line_segment([o, y_tip], egui::Stroke::new(1.5, green));
-                painter.line_segment([o, z_tip], egui::Stroke::new(1.5, blue));
-
-                let font = egui::FontId::proportional(13.0);
-                painter.text(x_tip, egui::Align2::LEFT_CENTER, "X", font.clone(), red);
-                painter.text(y_tip, egui::Align2::LEFT_CENTER, "Y", font.clone(), green);
-                painter.text(z_tip, egui::Align2::LEFT_CENTER, "Z", font,         blue);
-            }
-
             let traj = &self.simulator.trajectory;
             if traj.len() > 1 {
                 let total = traj.len();
