@@ -201,16 +201,28 @@ impl eframe::App for MyApp {
 
             let traj = &self.simulator.trajectory;
             if traj.len() > 1 {
-                for i in 1..traj.len() {
-                    let (x1, y1) =
-                        Simulator::project_3d_to_2d(&traj[i - 1], self.rotation_x, self.rotation_y);
-                    let (x2, y2) =
-                        Simulator::project_3d_to_2d(&traj[i], self.rotation_x, self.rotation_y);
-                    let scale = 50.0 * self.zoom;
-                    let p1 = canvas_center + egui::vec2(x1 * scale, y1 * scale);
-                    let p2 = canvas_center + egui::vec2(x2 * scale, y2 * scale);
-                    let color = attractor_color(i, traj.len());
-                    painter.line_segment([p1, p2], egui::Stroke::new(1.2, color));
+                let cos_x = self.rotation_x.cos();
+                let sin_x = self.rotation_x.sin();
+                let cos_y = self.rotation_y.cos();
+                let sin_y = self.rotation_y.sin();
+                let scale = 50.0 * self.zoom;
+                let total = traj.len();
+
+                let projected: Vec<egui::Pos2> = traj
+                    .iter()
+                    .map(|p| {
+                        let (px, py) =
+                            Simulator::project_3d_to_2d(p, cos_x, sin_x, cos_y, sin_y);
+                        canvas_center + egui::vec2(px * scale, py * scale)
+                    })
+                    .collect();
+
+                for i in 1..total {
+                    let color = attractor_color(i, total);
+                    painter.line_segment(
+                        [projected[i - 1], projected[i]],
+                        egui::Stroke::new(1.2, color),
+                    );
                 }
             }
 

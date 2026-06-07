@@ -181,15 +181,16 @@ impl Simulator {
         self.trajectory.push(self.state);
     }
 
-    pub fn project_3d_to_2d(point: &State, angle_x: f32, angle_y: f32) -> (f32, f32) {
+    pub fn project_3d_to_2d(
+        point: &State,
+        cos_x: f32,
+        sin_x: f32,
+        cos_y: f32,
+        sin_y: f32,
+    ) -> (f32, f32) {
         let x = point.x as f32;
         let y = point.y as f32;
         let z = point.z as f32;
-
-        let cos_x = angle_x.cos();
-        let sin_x = angle_x.sin();
-        let cos_y = angle_y.cos();
-        let sin_y = angle_y.sin();
 
         let y_rot = y * cos_x - z * sin_x;
         let z_rot = y * sin_x + z * cos_x;
