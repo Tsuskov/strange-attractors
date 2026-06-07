@@ -229,24 +229,43 @@ impl eframe::App for MyApp {
             };
             painter.rect_filled(response.rect, 4.0, bg);
 
+            let cos_x = self.rotation_x.cos();
+            let sin_x = self.rotation_x.sin();
+            let cos_y = self.rotation_y.cos();
+            let sin_y = self.rotation_y.sin();
+            let scale = 50.0 * self.zoom;
+            let view_origin = canvas_center + self.pan;
+
+            let project_pt = |s: State| -> egui::Pos2 {
+                let (px, py) = Simulator::project_3d_to_2d(&s, cos_x, sin_x, cos_y, sin_y);
+                view_origin + egui::vec2(px * scale, py * scale)
+            };
+
+            {
+                let o = project_pt(State { x: 0.0, y: 0.0, z: 0.0 });
+                let x_tip = project_pt(State { x: 10.0, y: 0.0, z: 0.0 });
+                let y_tip = project_pt(State { x: 0.0, y: 10.0, z: 0.0 });
+                let z_tip = project_pt(State { x: 0.0, y: 0.0, z: 10.0 });
+
+                let red   = egui::Color32::from_rgb(220, 60,  60);
+                let green = egui::Color32::from_rgb(60,  200, 60);
+                let blue  = egui::Color32::from_rgb(80,  120, 255);
+
+                painter.line_segment([o, x_tip], egui::Stroke::new(1.5, red));
+                painter.line_segment([o, y_tip], egui::Stroke::new(1.5, green));
+                painter.line_segment([o, z_tip], egui::Stroke::new(1.5, blue));
+
+                let font = egui::FontId::proportional(13.0);
+                painter.text(x_tip, egui::Align2::LEFT_CENTER, "X", font.clone(), red);
+                painter.text(y_tip, egui::Align2::LEFT_CENTER, "Y", font.clone(), green);
+                painter.text(z_tip, egui::Align2::LEFT_CENTER, "Z", font,         blue);
+            }
+
             let traj = &self.simulator.trajectory;
             if traj.len() > 1 {
-                let cos_x = self.rotation_x.cos();
-                let sin_x = self.rotation_x.sin();
-                let cos_y = self.rotation_y.cos();
-                let sin_y = self.rotation_y.sin();
-                let scale = 50.0 * self.zoom;
                 let total = traj.len();
 
-                let origin = canvas_center + self.pan;
-                let projected: Vec<egui::Pos2> = traj
-                    .iter()
-                    .map(|p| {
-                        let (px, py) =
-                            Simulator::project_3d_to_2d(p, cos_x, sin_x, cos_y, sin_y);
-                        origin + egui::vec2(px * scale, py * scale)
-                    })
-                    .collect();
+                let projected: Vec<egui::Pos2> = traj.iter().map(|&p| project_pt(p)).collect();
 
                 for i in 1..total {
                     let c = attractor_color(i, total);
